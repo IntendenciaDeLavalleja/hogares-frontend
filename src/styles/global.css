@@ -1,13 +1,15 @@
 @import "tailwindcss";
 @import "../features/landing/landing.css";
-@plugin "daisyui";
+@plugin "daisyui" {
+  themes: light --default;
+}
 
 @theme {
   --font-sans: "Avenir Next", Avenir, "Segoe UI", sans-serif;
 }
 
 :root {
-  color-scheme: light;
+  color-scheme: only light;
 }
 
 html {
@@ -20,6 +22,51 @@ body {
   background: #f4f6f8;
   color: #183149;
   font-family: var(--font-sans);
+}
+
+/* The form has a light design. Keep OS dark mode from mixing dark surfaces
+   with its institutional text colors or darkening native iOS controls. */
+.form-page {
+  color-scheme: only light;
+  color: var(--color-base-content);
+  overflow-wrap: anywhere;
+  --color-base-200: #f4f6f8;
+  --color-base-300: #cbd5e1;
+  --color-base-content: #183149;
+  --color-error: #b42318;
+  --color-error-content: #ffffff;
+  --color-success: #166534;
+  --color-success-content: #ffffff;
+  --color-warning: #a16207;
+  --color-warning-content: #ffffff;
+}
+
+.form-page :is(.input, .select, .textarea) {
+  min-width: 0;
+  min-inline-size: 0;
+  max-width: 100%;
+  min-height: 2.75rem;
+  font-size: 1rem;
+}
+
+.form-page .btn {
+  min-height: 2.75rem;
+  height: auto;
+  white-space: normal;
+}
+
+.form-page :is(.input, .textarea)::placeholder {
+  color: color-mix(in srgb, var(--color-base-content) 75%, transparent);
+  opacity: 1;
+}
+
+.form-page :is([class~="text-base-content/50"], [class~="text-base-content/55"], [class~="text-base-content/60"], [class~="text-base-content/65"]) {
+  color: color-mix(in srgb, var(--color-base-content) 75%, transparent);
+}
+
+.form-page :is(.choice-pill, .home-choice):has(input:focus-visible) {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 3px;
 }
 
 :is(button, input, select, textarea):not(.landing-page *) {

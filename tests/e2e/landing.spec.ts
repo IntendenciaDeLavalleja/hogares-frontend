@@ -1,5 +1,8 @@
 import { expect, test, type Page } from '@playwright/test'
 import contract from '../contracts/documents.json' with { type: 'json' }
+import { mockDraftAutosave } from './helpers/drafts'
+
+test.beforeEach(async ({ page }) => { await mockDraftAutosave(page) })
 
 const trackingResult = {
   trackingCode: 'HE27-PRUEBA123', status: 'submitted', statusLabel: 'Recibida',

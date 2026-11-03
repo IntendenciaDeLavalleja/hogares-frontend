@@ -34,6 +34,6 @@ export function useOptimizedImage() {
   }, [])
 
   const reset = useCallback(() => { runId.current += 1; setState({ isOptimizing: false, error: null, result: null, originalFile: null, optimizedFile: null }) }, [])
-  const statusMessage = state.result?.wasOptimized ? `Imagen convertida a WebP: ${formatBytes(state.result.originalSize)} → ${formatBytes(state.result.optimizedSize)}` : state.result ? 'La imagen ya tenía un tamaño adecuado.' : null
+  const statusMessage = state.result?.wasOptimized ? `Imagen optimizada: ${formatBytes(state.result.originalSize)} → ${formatBytes(state.result.optimizedSize)}` : state.result ? 'Imagen preparada para su validación y almacenamiento seguro.' : null
   return { ...state, setOriginalFile, reset, statusMessage }
 }

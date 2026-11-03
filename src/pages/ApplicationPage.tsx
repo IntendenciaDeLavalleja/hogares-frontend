@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AutoSaveIndicator } from '../components/form/AutoSaveIndicator'
 import { FormNavigation } from '../components/form/FormNavigation'
@@ -18,8 +18,11 @@ import { StepReview } from '../features/application/steps/StepReview'
 import { SubmissionConfirmation } from '../features/application/components/SubmissionConfirmation'
 import type { ConfirmationCaptcha } from '../features/application/types/application'
 import { ApiError, finalizeApplication } from '../api/applications'
-import { ensureApplicationDraft } from '../features/application/services/applicationDraft'
+import { ensureApplicationDraft, persistApplicationDraft } from '../features/application/services/applicationDraft'
 import { validateStep } from '../features/application/utils/validation'
+import { mapServerValidation } from '../features/application/utils/serverValidation'
+import { useDraftSync } from '../features/application/hooks/useDraftSync'
+import { clearPreparedDocumentFiles } from '../features/application/utils/preparedFiles'
 
 type Errors = Record<string, string>
 
@@ -32,11 +35,15 @@ export function ApplicationPage() {
   const previousStep = useApplicationStore((state) => state.previousStep)
   const [errors, setErrors] = useState<Errors>({})
   const [submitError, setSubmitError] = useState<string | null>(null)
+  const [serverMessages, setServerMessages] = useState<string[]>([])
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [captcha, setCaptcha] = useState<ConfirmationCaptcha | null>(null)
   const [captchaAttempt, setCaptchaAttempt] = useState(0)
   const setSubmissionReceipt = useApplicationStore((state) => state.setSubmissionReceipt)
   const navigate = useNavigate()
+  const draftSync = useDraftSync()
+  const existingReceipt = useApplicationStore((state) => state.submissionReceipt)
+  useEffect(() => { if (existingReceipt) void navigate('/comprobante', { replace: true }) }, [existingReceipt, navigate])
 
   const clearError = (key: string) => {
     setErrors((prev) => {
@@ -48,6 +55,8 @@ export function ApplicationPage() {
   }
 
   const goNext = () => {
+    setSubmitError(null)
+    setServerMessages([])
     const nextErrors = validateStep(currentStep, application)
     setErrors(nextErrors)
     if (!Object.keys(nextErrors).length) {
@@ -82,22 +91,31 @@ export function ApplicationPage() {
     if (!captcha?.token || !/^\d{1,2}$/.test(captcha.answer)) nextErrors.captcha = 'Completá la verificación numérica.'
     setErrors(nextErrors)
     setSubmitError(null)
+    setServerMessages([])
     if (Object.keys(nextErrors).length || !captcha) return
     setIsSubmitting(true)
     try {
       const draft = await ensureApplicationDraft()
+      await persistApplicationDraft(draft)
       const receipt = await finalizeApplication(draft, application, captcha)
       setSubmissionReceipt(receipt)
+      clearPreparedDocumentFiles()
       navigate('/comprobante')
     } catch (error) {
       setCaptcha(null)
       setCaptchaAttempt((value) => value + 1)
       if (error instanceof ApiError && error.details?.fields && typeof error.details.fields === 'object') {
         const fields = error.details.fields as Record<string, unknown>
-        if (fields.contactEmail) setErrors((previous) => ({ ...previous, contactEmail: 'Revisá el correo electrónico ingresado.' }))
-        if (fields.captcha) setErrors((previous) => ({ ...previous, captcha: 'Resolvé la nueva verificación.' }))
+        const mapped = mapServerValidation(fields, application)
+        if (mapped) { setCurrentStep(mapped.step); setErrors(mapped.errors); setServerMessages(mapped.messages) }
       }
       if (error instanceof ApiError && Array.isArray(error.details?.missingDocuments)) {
+        const missing = new Set(error.details.missingDocuments)
+        const state = useApplicationStore.getState()
+        state.updateApplication({ documents: state.application.documents.map((document) => missing.has(document.type)
+          ? { ...document, referenceId: undefined, status: 'error' as const } : document) })
+        setCurrentStep(6)
+        setErrors({ documents: 'Revisá los documentos pendientes indicados abajo.' })
         setSubmitError('Falta subir documentación obligatoria. Volvé a Documentación y completá los archivos indicados.')
       } else {
         setSubmitError(error instanceof Error ? error.message : 'No se pudo enviar la solicitud.')
@@ -118,5 +136,5 @@ export function ApplicationPage() {
     <><StepReview onEdit={(index) => { setCurrentStep(index); setErrors({}); window.scrollTo({ top: 0, behavior: 'smooth' }) }} errors={errors} /><SubmissionConfirmation key={captchaAttempt} value={captcha} onChange={setCaptcha} errors={errors} /></>
   ][currentStep]
 
-  return <FormLayout><PageContainer className="py-6 sm:py-8"><div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-xs font-bold uppercase tracking-[0.16em] text-primary">Solicitud de alojamiento</p><p className="mt-1 text-sm text-base-content/55">Hogares Estudiantiles · Convocatoria {APPLICATION_YEAR}</p></div><AutoSaveIndicator /></div><FormStepper currentStep={currentStep} onSelect={(index) => { setCurrentStep(index); setErrors({}); setSubmitError(null); window.scrollTo({ top: 0, behavior: 'smooth' }) }} /><section className="rounded-box border border-base-300 bg-base-100 p-5 shadow-sm sm:p-8">{step}{submitError && <div className="alert alert-error mt-6" role="alert"><span>{submitError}</span>{currentStep === 7 && <button type="button" className="btn btn-sm" onClick={() => setCurrentStep(6)}>Ir a Documentación</button>}</div>}<FormNavigation currentStep={currentStep} onBack={goBack} onNext={goNext} onSubmit={() => void finish()} canSubmit={!isSubmitting} submitting={isSubmitting} /></section></PageContainer></FormLayout>
+  return <FormLayout><PageContainer className="py-6 sm:py-8"><div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-xs font-bold uppercase tracking-[0.16em] text-primary">Solicitud de alojamiento</p><p className="mt-1 text-sm text-base-content/55">Hogares Estudiantiles · Convocatoria {APPLICATION_YEAR}</p></div><AutoSaveIndicator /></div><p className="mb-4 text-sm text-base-content/75" role="status">{draftSync.message}{draftSync.failed && <button className="ml-2 font-semibold text-primary underline" type="button" onClick={draftSync.retry}>Reintentar guardado</button>}</p><FormStepper currentStep={currentStep} onSelect={(index) => { if (isSubmitting) return; setCurrentStep(index); setErrors({}); setSubmitError(null); setServerMessages([]); window.scrollTo({ top: 0, behavior: 'smooth' }) }} /><section className="rounded-box border border-base-300 bg-base-100 p-5 shadow-sm sm:p-8"><fieldset className="min-w-0" disabled={isSubmitting}>{step}</fieldset>{submitError && <div className="alert alert-error mt-6" role="alert"><div><p>{submitError}</p>{serverMessages.length > 0 && <ul className="mt-2 list-disc pl-5">{serverMessages.map((message) => <li key={message}>{message}</li>)}</ul>}</div>{currentStep === 7 && <button type="button" className="btn btn-sm" onClick={() => setCurrentStep(6)}>Ir a Documentación</button>}</div>}<FormNavigation currentStep={currentStep} onBack={goBack} onNext={goNext} onSubmit={() => void finish()} canSubmit={!isSubmitting} submitting={isSubmitting} /></section></PageContainer></FormLayout>
 }

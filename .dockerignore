@@ -1,4 +1,5 @@
 .git
+.integration-backend
 .env
 .env.*
 .github

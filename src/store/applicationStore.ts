@@ -38,6 +38,7 @@ function newId(): string {
 }
 
 interface ApplicationStore {
+  applicationSession: number
   currentStep: number
   application: ApplicationFormData
   backendDraft: BackendDraft | null
@@ -64,6 +65,7 @@ interface ApplicationStore {
 export const useApplicationStore = create<ApplicationStore>()(
   persist(
     (set) => ({
+      applicationSession: 0,
       currentStep: 0,
       application: emptyApplication,
       backendDraft: null,
@@ -84,7 +86,7 @@ export const useApplicationStore = create<ApplicationStore>()(
       removeOutsideParent: (id) => set((state) => ({ application: { ...state.application, outsideParents: state.application.outsideParents.filter((parent) => parent.id !== id) } })),
       setBackendDraft: (backendDraft) => set({ backendDraft }),
       setSubmissionReceipt: (submissionReceipt) => set({ submissionReceipt }),
-      resetApplication: () => { clearPreparedDocumentFiles(); set({ currentStep: 0, application: structuredClone(emptyApplication), backendDraft: null, submissionReceipt: null }) },
+      resetApplication: () => { clearPreparedDocumentFiles(); set((state) => ({ applicationSession: state.applicationSession + 1, currentStep: 0, application: structuredClone(emptyApplication), backendDraft: null, submissionReceipt: null })) },
     }),
     {
       name: 'idl-hogares-estudiantiles-2026', version: 2,

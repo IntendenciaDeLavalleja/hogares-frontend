@@ -1,98 +1,103 @@
-import { useEffect, useEffectEvent, useRef, useState, type ChangeEvent } from 'react'
+import { useEffect, useRef, useState, type ChangeEvent } from 'react'
 import { ApiError, uploadApplicationDocument } from '../../../api/applications'
 import { useApplicationStore } from '../../../store/applicationStore'
 import type { DocumentMetadata, DocumentType } from '../types/application'
-import { useOptimizedImage } from '../hooks/useOptimizedImage'
-import { ensureApplicationDraft } from '../services/applicationDraft'
-import { ACCEPTED_IMAGE_MIME_TYPES, formatBytes } from '../utils/optimizeImage'
-import { removePreparedDocumentFile, setPreparedDocumentFile } from '../utils/preparedFiles'
-
-const isImage = (type: string): boolean => (ACCEPTED_IMAGE_MIME_TYPES as readonly string[]).includes(type)
+import { ensureApplicationDraft, persistApplicationDraft, recoverApplicationDraft } from '../services/applicationDraft'
+import { formatBytes } from '../utils/optimizeImage'
+import { prepareDocumentFile } from '../utils/documentFiles'
+import { getPreparedDocumentFile, removePreparedDocumentFile, setPreparedDocumentFile } from '../utils/preparedFiles'
 
 export function DocumentPlaceholder({ type, label, description, required }: { type: DocumentType; label: string; description: string; required: boolean }) {
   const document = useApplicationStore((state) => state.application.documents.find((item) => item.type === type))
-  const updateApplication = useApplicationStore((state) => state.updateApplication)
-  const setBackendDraft = useApplicationStore((state) => state.setBackendDraft)
-  const { isOptimizing, error: optimizationError, result, setOriginalFile, reset, statusMessage } = useOptimizedImage()
-  const [uploadError, setUploadError] = useState<string | null>(null)
-  const [isUploading, setIsUploading] = useState(false)
-  const processingKey = useRef<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [phase, setPhase] = useState<'idle' | 'preparing' | 'uploading'>('idle')
+  const running = useRef(false)
+  const inputId = `document-${type}`
+  const statusId = `${inputId}-status`
 
-  function setMetadata(metadata: DocumentMetadata | null) {
-    const others = useApplicationStore.getState().application.documents.filter((item) => item.type !== type)
-    updateApplication({ documents: metadata ? [...others, metadata] : others })
+  function setMetadata(metadata: DocumentMetadata) {
+    const state = useApplicationStore.getState()
+    state.updateApplication({ documents: [...state.application.documents.filter((item) => item.type !== type), metadata] })
   }
 
-  async function upload(file: File, localMetadata: DocumentMetadata) {
-    setUploadError(null)
-    setIsUploading(true)
-    setMetadata({ ...localMetadata, status: 'uploading' })
+  async function upload(file: File, metadata: DocumentMetadata, previous?: DocumentMetadata) {
+    setPhase('uploading')
     setPreparedDocumentFile(type, file)
+    setMetadata({ ...metadata, status: 'uploading' })
+    let draft = await ensureApplicationDraft()
+    let uploaded: DocumentMetadata
     try {
-      let draft = await ensureApplicationDraft()
-      let uploaded: DocumentMetadata
-      try {
+      await persistApplicationDraft(draft)
+      uploaded = await uploadApplicationDocument(draft, type, file, previous?.referenceId)
+    } catch (failure) {
+      if (failure instanceof ApiError && [403, 404, 410].includes(failure.status ?? 0)) {
+        draft = await recoverApplicationDraft(draft, failure)
         uploaded = await uploadApplicationDocument(draft, type, file)
-      } catch (error) {
-        if (error instanceof ApiError && (error.status === 403 || error.status === 410)) {
-          setBackendDraft(null)
-          draft = await ensureApplicationDraft()
-          uploaded = await uploadApplicationDocument(draft, type, file)
-        } else {
-          throw error
-        }
-      }
-      setMetadata({ ...localMetadata, ...uploaded, name: localMetadata.name, originalSize: localMetadata.originalSize })
+      } else throw failure
+    }
+    if (useApplicationStore.getState().backendDraft?.id === draft.id) {
+      setMetadata({ ...metadata, ...uploaded, name: metadata.name, originalSize: metadata.originalSize })
       removePreparedDocumentFile(type)
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'No se pudo subir el documento.'
-      setUploadError(message)
-      setMetadata({ ...localMetadata, status: 'error' })
-    } finally {
-      setIsUploading(false)
     }
   }
 
-  const uploadOptimized = useEffectEvent((optimized: NonNullable<typeof result>) => {
-    const key = `${optimized.file.name}:${optimized.file.size}:${optimized.file.lastModified}`
-    if (processingKey.current === key) return
-    processingKey.current = key
-    const selected = useApplicationStore.getState().application.documents.find((item) => item.type === type)
-    void upload(optimized.file, { type, name: selected?.name ?? optimized.file.name, optimizedFileName: optimized.file.name, status: 'pending', mimeType: optimized.optimizedType, originalSize: optimized.originalSize, optimizedSize: optimized.optimizedSize, width: optimized.width, height: optimized.height, wasOptimized: optimized.wasOptimized })
-  })
-
-  useEffect(() => {
-    if (!result || isOptimizing) return
-    uploadOptimized(result)
-  }, [isOptimizing, result])
+  async function process(file: File, retry = false) {
+    if (running.current) return
+    running.current = true
+    setError(null)
+    setPhase('preparing')
+    const previous = useApplicationStore.getState().application.documents.find((item) => item.type === type)
+    const previousDraftId = useApplicationStore.getState().backendDraft?.id
+    const session = useApplicationStore.getState().applicationSession
+    let metadata: DocumentMetadata | undefined
+    try {
+      const prepared = await prepareDocumentFile(file, !retry)
+      metadata = { type, name: retry ? previous?.name ?? file.name : file.name, optimizedFileName: prepared.name, mimeType: prepared.type, originalSize: retry ? previous?.originalSize ?? file.size : file.size, optimizedSize: prepared.size, status: 'pending' }
+      await upload(prepared, metadata, previous)
+    } catch (failure) {
+      if (useApplicationStore.getState().applicationSession !== session) return
+      setError(failure instanceof Error ? failure.message : 'No se pudo subir el archivo. Volvé a intentar.')
+      if (metadata) {
+        // A replacement failure must not discard a document already stored.
+        setMetadata(previous?.status === 'ready' && previous.referenceId && useApplicationStore.getState().backendDraft?.id === previousDraftId ? previous : { ...metadata, status: 'error' })
+      }
+    } finally { running.current = false; setPhase('idle') }
+  }
 
   function handleChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.currentTarget.files?.[0]
     event.currentTarget.value = ''
-    setUploadError(null)
-    processingKey.current = null
-    if (!file) return
-    removePreparedDocumentFile(type)
-    if (isImage(file.type)) {
-      setMetadata({ type, name: file.name, status: 'pending', mimeType: file.type, originalSize: file.size })
-      setOriginalFile(file)
-      return
-    }
-    if (file.type === 'application/pdf') {
-      reset()
-      if (file.size > 10 * 1024 * 1024) {
-        setUploadError('El PDF supera el máximo permitido de 10 MB.')
-        setMetadata(null)
-        return
-      }
-      void upload(file, { type, name: file.name, optimizedFileName: file.name, status: 'pending', mimeType: file.type, originalSize: file.size, optimizedSize: file.size, wasOptimized: false })
-      return
-    }
-    setUploadError('Formato no permitido. Seleccioná JPG, PNG, WebP o PDF.')
+    if (file) void process(file)
   }
 
-  const isBusy = isOptimizing || isUploading
-  const visibleError = uploadError ?? optimizationError
+  useEffect(() => {
+    const online = () => {
+      if (useApplicationStore.getState().application.documents.find((item) => item.type === type)?.status === 'error') {
+        setError('La conexión volvió. Podés reintentar la carga con el botón de abajo.')
+      }
+    }
+    window.addEventListener('online', online)
+    return () => window.removeEventListener('online', online)
+  }, [type])
+
+  const busy = phase !== 'idle'
   const uploaded = document?.status === 'ready' && Boolean(document.referenceId)
-  return <div className="rounded-box border border-base-300 bg-base-100 p-4"><div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><p className="font-medium">{label}{required && <span className="ml-1 text-error">*</span>}</p><p className="mt-1 text-xs text-base-content/55">{description}</p></div><label className={`btn btn-outline btn-sm shrink-0 ${isBusy ? 'pointer-events-none opacity-60' : ''}`}>{isOptimizing ? 'Optimizando...' : isUploading ? 'Subiendo...' : document ? 'Reemplazar archivo' : 'Seleccionar archivo'}<input type="file" className="sr-only" accept="image/jpeg,image/png,image/webp,application/pdf" onChange={handleChange} disabled={isBusy} /></label></div><p className="mt-2 text-xs text-base-content/50">JPG, PNG, WebP (hasta 30 MB de origen) o PDF (hasta 10 MB). Las imágenes se convierten a WebP antes de almacenarse.</p>{isOptimizing && <p className="mt-3 text-xs font-medium text-primary" role="status">Optimizando imagen para ahorrar espacio...</p>}{isUploading && <p className="mt-3 text-xs font-medium text-primary" role="status">Subiendo documento al almacenamiento seguro...</p>}{visibleError && <p className="mt-3 text-xs text-error" role="alert">{visibleError} Seleccioná nuevamente el archivo para reintentar.</p>}{statusMessage && !visibleError && !isUploading && !uploaded && <p className="mt-3 text-xs text-success" role="status">{statusMessage}</p>}{uploaded && <p className="mt-3 flex flex-wrap items-center gap-2 text-xs text-success" role="status"><span aria-hidden="true">✓</span>{document.name}<span className="text-base-content/50">{document.optimizedSize !== undefined ? `· ${formatBytes(document.optimizedSize)}` : ''} · almacenado correctamente</span></p>}{document?.status === 'ready' && !document.referenceId && <p className="mt-3 text-xs text-warning">Este archivo pertenece a una versión local anterior. Volvé a seleccionarlo para subirlo.</p>}</div>
+  const canRetry = !busy && Boolean(getPreparedDocumentFile(type)) && Boolean(error || document?.status === 'error')
+  return <div className="rounded-box border border-base-300 bg-base-100 p-4" data-document-type={type} aria-busy={busy}>
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div><p className="font-medium">{label}{required && <span className="ml-1 text-error" aria-hidden="true">*</span>}</p><p id={`${inputId}-description`} className="mt-1 text-xs text-base-content/70">{description}</p></div>
+      <label className={`btn btn-outline btn-sm shrink-0 ${busy ? 'pointer-events-none opacity-60' : ''}`} htmlFor={inputId}>
+        {phase === 'preparing' ? 'Preparando…' : phase === 'uploading' ? 'Subiendo…' : document ? 'Reemplazar archivo' : 'Seleccionar archivo'}
+        <input id={inputId} aria-label={label} aria-describedby={`${inputId}-description ${statusId}`} aria-invalid={Boolean(error) && !uploaded} type="file" className="sr-only" accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif,application/pdf,.pdf" onChange={handleChange} disabled={busy} />
+      </label>
+    </div>
+    <p className="mt-2 text-xs text-base-content/70">JPG, PNG, WebP o HEIC/HEIF (hasta 30 MB) y PDF (hasta 10 MB). Para varias páginas, frente y dorso o varios integrantes, adjuntá un PDF que los reúna.</p>
+    <div id={statusId}>
+      {busy && <p className="mt-3 text-sm font-medium text-primary" role="status">{phase === 'preparing' ? 'Preparando el archivo…' : 'Guardando el documento. En conexiones lentas puede tardar unos minutos.'}</p>}
+      {error && <p className="mt-3 text-sm text-error" role="alert">{error}{uploaded && ' El documento anterior continúa guardado.'}</p>}
+      {!busy && !uploaded && document && !error && <p className="mt-3 text-sm text-error" role="alert">La carga quedó pendiente. Volvé a intentarlo para completar este documento.</p>}
+      {uploaded && <p className="mt-3 flex flex-wrap items-center gap-2 text-sm text-success" role="status"><span aria-hidden="true">✓</span><span className="break-all">{document.name}</span><span>{document.optimizedSize !== undefined ? `· ${formatBytes(document.optimizedSize)}` : ''} · guardado correctamente</span></p>}
+    </div>
+    {canRetry && <button type="button" className="btn btn-outline btn-sm mt-3" onClick={() => { const prepared = getPreparedDocumentFile(type); if (prepared) void process(prepared, true) }}>Reintentar carga</button>}
+  </div>
 }

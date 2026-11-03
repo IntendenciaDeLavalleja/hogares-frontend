@@ -23,7 +23,46 @@ npm run check
 ```
 
 Ejecuta pruebas unitarias, configuración de despliegue, lint, TypeScript, compilación y navegador móvil/escritorio.
-Instalar Chromium con `npx playwright install chromium` antes de la primera prueba de navegador.
+Instalar los motores con `npx playwright install chromium webkit` antes de la primera prueba de navegador.
+La matriz incluye escritorio, Android Chromium e iPhone WebKit, con verificaciones de modo oscuro,
+contraste, PDFs, fotos y recuperación de errores. Son pruebas de navegador emulado, no dispositivos físicos.
+Playwright se fija en `1.63.0` mientras se corrige la [regresión de CSP de WebKit en 1.64](https://github.com/microsoft/playwright/issues/43497);
+las pruebas siguen rechazando cualquier violación CSP y la política de producción se conserva.
+
+## Actualización del formulario en producción
+
+Desplegar primero el backend y después reconstruir este frontend, conservando las variables de ambos.
+Los borradores existentes mantienen su identificador y las solicitudes enviadas no se modifican.
+Quienes estaban completando una solicitud deben recargar la página en el mismo navegador;
+**no borrar el almacenamiento del sitio ni iniciar una solicitud nueva para resolver un error de carga**.
+Las respuestas locales se conservan y el formulario comprueba los adjuntos guardados en el servidor.
+
+El formulario guarda el avance cifrado antes del envío y muestra el comprobante únicamente cuando
+la API confirma la solicitud. Las cargas se procesan en cola y admiten reintento sin seleccionar
+el archivo otra vez mientras se conserve esa pestaña. Si se pierde una respuesta, se consulta
+el borrador para recuperar el resultado. El tema claro se mantiene legible cuando el teléfono usa
+modo oscuro. No es necesario cambiar claves de cifrado ni ejecutar migraciones para esta actualización.
+
+## Inscripción completa con API real aislada
+
+Desde el repositorio backend, con sus dependencias de desarrollo instaladas:
+
+```bash
+python tests/browser_server.py
+```
+
+Usa una base SQLite temporal y archivos en memoria; no usa datos ni correo de producción.
+Desde este frontend, en otra terminal:
+
+```bash
+VITE_API_URL=http://127.0.0.1:5001/api VITE_APPLICATION_YEAR=2027 npm run build
+node scripts/serve-integration.mjs
+```
+
+Con ambos procesos activos, ejecutar `npm run test:integration`. El servidor del frontend aplica
+la CSP de producción con el origen de esa API local. Se recorren los ocho pasos, guardado de avance,
+JPEG/PDF, recarga, captcha, envío, comprobante, idempotencia y seguimiento en tres motores/dispositivos
+emulados. Los tests rechazan URLs de producción. CI repite este flujo contra el backend de `main`.
 
 ## Coolify: recurso independiente
 

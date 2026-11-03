@@ -1,6 +1,6 @@
 import type { DocumentType } from '../types/application'
 
-// Los archivos permanecen solo en memoria hasta que exista el endpoint de MinIO.
+// Keep a session-only copy for retries; reset/submission releases these files.
 const preparedFiles = new Map<DocumentType, File>()
 
 export function setPreparedDocumentFile(type: DocumentType, file: File): void {

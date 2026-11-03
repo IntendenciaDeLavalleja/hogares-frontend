@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { FormField, Input } from '../../../components/form/FormField'
 import { getConfirmationCaptcha } from '../../../api/applications'
 import { useApplicationStore } from '../../../store/applicationStore'
-import { ensureApplicationDraft } from '../services/applicationDraft'
+import { ensureApplicationDraft, recoverApplicationDraft } from '../services/applicationDraft'
 import type { ConfirmationCaptcha } from '../types/application'
 
 export function SubmissionConfirmation({ value, onChange, errors }: {
@@ -17,7 +17,10 @@ export function SubmissionConfirmation({ value, onChange, errors }: {
   const [reload, setReload] = useState(0)
   useEffect(() => {
     let active = true
-    ensureApplicationDraft().then(getConfirmationCaptcha).then((challenge) => {
+    ensureApplicationDraft().then(async (draft) => {
+      try { return await getConfirmationCaptcha(draft) }
+      catch (error) { return getConfirmationCaptcha(await recoverApplicationDraft(draft, error)) }
+    }).then((challenge) => {
       if (active) {
         setQuestion(challenge.question)
         onChange({ token: challenge.token, answer: '' })

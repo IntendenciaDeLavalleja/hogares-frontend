@@ -181,6 +181,29 @@ export interface BackendDraft {
   expiresAt: string
 }
 
+export interface StoredDocument {
+  id: string
+  type: DocumentType
+  name: string
+  storedName: string
+  mimeType: string
+  size: number
+  width?: number
+  height?: number
+}
+
+export interface DraftSnapshot {
+  id: string
+  status: 'draft' | 'submitted'
+  expiresAt: string
+  updatedAt?: string
+  trackingCode?: string | null
+  submittedAt?: string | null
+  confirmationEmailSent?: boolean
+  documents: StoredDocument[]
+  data?: Partial<ApplicationFormData> | null
+}
+
 export interface SubmissionReceipt {
   id: string
   trackingCode: string

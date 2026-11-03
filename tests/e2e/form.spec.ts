@@ -1,5 +1,8 @@
 import { expect, test, type Page } from '@playwright/test'
 import contract from '../contracts/documents.json' with { type: 'json' }
+import { mockDraftAutosave } from './helpers/drafts'
+
+test.beforeEach(async ({ page }) => { await mockDraftAutosave(page) })
 
 test('la página principal carga sus recursos sin errores de JavaScript o CSP', async ({ page }) => {
   const errors: string[] = []
@@ -77,8 +80,10 @@ test('documentos se recalculan al cambiar vehículos y vivienda', async ({ page 
 test('un borrador anterior recupera valores y exige responder la pregunta nueva', async ({ page }) => {
   await openStep(page, 3, true)
   await page.getByRole('button', { name: 'Continuar' }).click()
-  await expect(page.getByRole('alert').filter({ hasText: 'situación de discapacidad' })).toBeVisible()
-  await page.getByRole('group', { name: '¿Se encuentra en situación de discapacidad?' }).getByText('No', { exact: true }).click()
+  const disability = page.getByRole('group', { name: '¿Se encuentra en situación de discapacidad?' })
+  await expect(disability.getByRole('alert')).toBeVisible()
+  await expect(disability).toHaveAttribute('aria-invalid', 'true')
+  await disability.getByText('No', { exact: true }).click()
   await page.getByRole('button', { name: 'Continuar' }).click()
   await expect(page.getByLabel('Situación de la madre')).toHaveValue('lives_with')
   await expect(page.getByLabel('Situación del padre')).toHaveValue('outside')

@@ -1,4 +1,4 @@
-export const ACCEPTED_IMAGE_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'] as const
+export const ACCEPTED_IMAGE_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'] as const
 export type AcceptedImageMimeType = (typeof ACCEPTED_IMAGE_MIME_TYPES)[number]
 
 export const MAX_ORIGINAL_SIZE_BYTES = 30 * 1024 * 1024
@@ -14,8 +14,8 @@ export interface OptimizeImageResult {
   optimizedSize: number
   originalType: string
   optimizedType: string
-  width: number
-  height: number
+  width?: number
+  height?: number
   wasOptimized: boolean
   quality?: number
 }
@@ -43,9 +43,9 @@ function isAcceptedMime(type: string): type is AcceptedImageMimeType {
   return (ACCEPTED_IMAGE_MIME_TYPES as readonly string[]).includes(type)
 }
 
-function optimizedFileName(originalName: string): string {
+function optimizedFileName(originalName: string, mimeType: string): string {
   const base = originalName.slice(0, originalName.lastIndexOf('.') > 0 ? originalName.lastIndexOf('.') : originalName.length).replace(/[^a-zA-Z0-9_-]+/g, '_').slice(0, 80) || 'imagen'
-  return `${base}.webp`
+  return `${base}.${mimeType === 'image/jpeg' ? 'jpg' : mimeType === 'image/png' ? 'png' : 'webp'}`
 }
 
 async function decodeWithBitmap(file: File): Promise<DecodedImage> {
@@ -81,15 +81,23 @@ function targetSize(width: number, height: number): { width: number; height: num
   return { width: Math.max(1, Math.round(width * ratio)), height: Math.max(1, Math.round(height * ratio)) }
 }
 
-function canvasToBlob(canvas: HTMLCanvasElement, quality: number): Promise<Blob | null> {
-  return new Promise((resolve) => canvas.toBlob(resolve, 'image/webp', quality))
+async function canvasToBlob(canvas: HTMLCanvasElement, quality: number): Promise<Blob | null> {
+  const webp = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/webp', quality))
+  if (webp?.type === 'image/webp') return webp
+  return new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', quality))
 }
 
 export async function optimizeImage(file: File): Promise<OptimizeImageResult> {
   if (!(file instanceof File) || !isAcceptedMime(file.type)) throw new OptimizeImageError('invalid_type', 'El formato de imagen no está permitido. Usá JPG, PNG o WebP.')
   if (file.size > MAX_ORIGINAL_SIZE_BYTES) throw new OptimizeImageError('too_large_original', 'La imagen supera el máximo permitido de 30 MB.')
 
-  const decoded = await decodeImage(file)
+  let decoded: DecodedImage
+  try { decoded = await decodeImage(file) }
+  catch {
+    // Mobile browsers may lack HEIC decoding or enough memory. The server also
+    // validates and optimizes images, so preserve the original for that path.
+    return { file, originalSize: file.size, optimizedSize: file.size, originalType: file.type, optimizedType: file.type, wasOptimized: false }
+  }
   try {
     if (decoded.width < 1 || decoded.height < 1) throw new OptimizeImageError('invalid_dimensions', 'No pudimos procesar esta imagen. Probá seleccionando otra.')
     const size = targetSize(decoded.width, decoded.height)
@@ -100,6 +108,8 @@ export async function optimizeImage(file: File): Promise<OptimizeImageResult> {
     if (!context) throw new OptimizeImageError('decode_failed', 'No pudimos procesar esta imagen. Probá seleccionando otra.')
     context.imageSmoothingEnabled = true
     context.imageSmoothingQuality = 'high'
+    context.fillStyle = '#ffffff'
+    context.fillRect(0, 0, size.width, size.height)
     context.drawImage(decoded.source, 0, 0, size.width, size.height)
 
     let quality = INITIAL_WEBP_QUALITY
@@ -118,8 +128,8 @@ export async function optimizeImage(file: File): Promise<OptimizeImageResult> {
       return { file, originalSize: file.size, optimizedSize: file.size, originalType: file.type, optimizedType: file.type, width: decoded.width, height: decoded.height, wasOptimized: false }
     }
     if (blob.size > MAX_FINAL_SIZE_BYTES) throw new OptimizeImageError('final_too_large', 'La imagen sigue siendo demasiado pesada después de optimizarla.')
-    const result = new File([blob], optimizedFileName(file.name), { type: 'image/webp', lastModified: file.lastModified })
-    return { file: result, originalSize: file.size, optimizedSize: blob.size, originalType: file.type, optimizedType: 'image/webp', width: size.width, height: size.height, wasOptimized: true, quality: Math.round(quality * 100) / 100 }
+    const result = new File([blob], optimizedFileName(file.name, blob.type), { type: blob.type, lastModified: file.lastModified })
+    return { file: result, originalSize: file.size, optimizedSize: blob.size, originalType: file.type, optimizedType: blob.type, width: size.width, height: size.height, wasOptimized: true, quality: Math.round(quality * 100) / 100 }
   } finally {
     decoded.cleanup()
   }

@@ -5,11 +5,26 @@ import { isValidPersonName, isValidPhone, isValidUruguayanId } from './text'
 type Errors = Record<string, string>
 
 function required(errors: Errors, key: string, value: string | number | boolean | null | undefined, label: string) {
-  if (value === '' || value === null || value === undefined) errors[key] = `${label} es obligatorio.`
+  if (value === null || value === undefined || (typeof value === 'string' && !value.trim())) errors[key] = `${label} es obligatorio.`
 }
 
 function outsideRange(value: NumericValue, min: number, max: number): boolean {
-  return typeof value === 'number' && (value < min || value > max)
+  return typeof value !== 'number' || !Number.isFinite(value) || value < min || value > max
+}
+
+function textLength(errors: Errors, key: string, value: string, label: string, min: number, max: number) {
+  if (errors[key]) return
+  if (typeof value !== 'string') { if (min > 0 || value != null) errors[key] = `${label}: ingresá un valor válido.`; return }
+  if (value.trim().length < min) errors[key] = `${label}: ingresá al menos ${min} ${min === 1 ? 'carácter' : 'caracteres'}.`
+  else if (value.length > max) errors[key] = `${label}: no puede superar ${max} caracteres.`
+}
+
+function realBirthDate(value: string): Date | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value)
+  if (!match) return null
+  const [, year, month, day] = match.map(Number)
+  const date = new Date(Date.UTC(year, month - 1, day))
+  return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day ? date : null
 }
 
 export function validateStep(step: number, app: ApplicationFormData): Errors {
@@ -19,7 +34,7 @@ export function validateStep(step: number, app: ApplicationFormData): Errors {
     required(errors, 'type', app.request.type, 'El tipo de solicitud')
     if (app.request.type === 'renewal') {
       required(errors, 'renewalYear', app.request.renewalYear, 'El año de ingreso')
-      if (outsideRange(app.request.renewalYear, 2000, APPLICATION_YEAR)) errors.renewalYear = `Ingresá un año entre 2000 y ${APPLICATION_YEAR}.`
+      if (outsideRange(app.request.renewalYear, 2000, APPLICATION_YEAR) || !Number.isInteger(app.request.renewalYear)) errors.renewalYear = `Ingresá un año entero entre 2000 y ${APPLICATION_YEAR}.`
       if (app.request.sameHome === null) required(errors, 'sameHome', app.request.sameHome, 'La respuesta sobre el hogar')
     }
   }
@@ -36,7 +51,13 @@ export function validateStep(step: number, app: ApplicationFormData): Errors {
       }
     }
     required(errors, 'birthDate', app.applicant.birthDate, 'La fecha de nacimiento')
-    if (app.applicant.birthDate && app.applicant.birthDate > new Date().toISOString().slice(0, 10)) errors.birthDate = 'La fecha de nacimiento no puede ser futura.'
+    if (app.applicant.birthDate) {
+      const birthDate = realBirthDate(app.applicant.birthDate)
+      const today = new Date(`${new Date().toISOString().slice(0, 10)}T00:00:00Z`)
+      if (!birthDate) errors.birthDate = 'Ingresá una fecha de nacimiento válida.'
+      else if (birthDate > today) errors.birthDate = 'La fecha de nacimiento no puede ser futura.'
+      else if ((today.getTime() - birthDate.getTime()) / 86_400_000 > 121 * 366) errors.birthDate = 'La fecha de nacimiento está fuera del rango permitido.'
+    }
     required(errors, 'address', app.applicant.address, 'El domicilio')
     required(errors, 'locality', app.applicant.locality, 'La localidad')
     required(errors, 'phone', app.applicant.phone, 'El teléfono')
@@ -49,7 +70,7 @@ export function validateStep(step: number, app: ApplicationFormData): Errors {
     required(errors, 'institution', app.studies.institution, 'La institución')
     if (app.studies.average !== '' && outsideRange(app.studies.average, 0, 12)) errors.average = 'El promedio debe estar entre 0 y 12.'
     if (app.studies.hasPendingSubjects === null) errors.pendingSubjects = 'Indicá si tiene materias pendientes.'
-    if (app.studies.hasPendingSubjects && (app.studies.pendingSubjectsCount === '' || !Number.isInteger(app.studies.pendingSubjectsCount) || app.studies.pendingSubjectsCount < 1)) errors.pendingSubjectsCount = 'Ingresá una cantidad entera mayor que cero.'
+    if (app.studies.hasPendingSubjects && (outsideRange(app.studies.pendingSubjectsCount, 1, 100) || !Number.isInteger(app.studies.pendingSubjectsCount))) errors.pendingSubjectsCount = 'Ingresá una cantidad entera entre 1 y 100.'
   }
   if (step === 3) {
     if (app.health.hasDisability == null) errors.disabilityChoice = 'Indicá si se encuentra en situación de discapacidad.'
@@ -195,13 +216,13 @@ export function validateStep(step: number, app: ApplicationFormData): Errors {
     if (app.socioeconomic.housingStatus === 'promissory_buyer' && (app.socioeconomic.installmentAmount === '' || outsideRange(app.socioeconomic.installmentAmount, 0, 1_000_000_000))) errors.installmentAmount = 'Ingresá un monto de cuota válido.'
     if (app.socioeconomic.motorcycle.owns === null) errors.motorcycle = 'Indicá si posee moto.'
     if (app.socioeconomic.motorcycle.owns) {
-      if (app.socioeconomic.motorcycle.quantity === '' || app.socioeconomic.motorcycle.quantity < 1 || !Number.isInteger(app.socioeconomic.motorcycle.quantity)) {
-        errors['motorcycle-quantity'] = 'Ingresá una cantidad entera mayor o igual a 1.'
+      if (outsideRange(app.socioeconomic.motorcycle.quantity, 1, 100) || !Number.isInteger(app.socioeconomic.motorcycle.quantity)) {
+        errors['motorcycle-quantity'] = 'Ingresá una cantidad entera entre 1 y 100.'
       }
       if (!app.socioeconomic.motorcycle.brand?.trim()) {
         errors['motorcycle-brand'] = 'La marca de la moto es obligatoria.'
       }
-      if (app.socioeconomic.motorcycle.year === '' || outsideRange(app.socioeconomic.motorcycle.year, 1900, APPLICATION_YEAR)) {
+      if (outsideRange(app.socioeconomic.motorcycle.year, 1900, APPLICATION_YEAR) || !Number.isInteger(app.socioeconomic.motorcycle.year)) {
         errors['motorcycle-year'] = `Ingresá un año entre 1900 y ${APPLICATION_YEAR}.`
       }
       if (errors['motorcycle-quantity'] || errors['motorcycle-brand'] || errors['motorcycle-year']) {
@@ -210,13 +231,13 @@ export function validateStep(step: number, app: ApplicationFormData): Errors {
     }
     if (app.socioeconomic.car.owns === null) errors.car = 'Indicá si posee automóvil.'
     if (app.socioeconomic.car.owns) {
-      if (app.socioeconomic.car.quantity === '' || app.socioeconomic.car.quantity < 1 || !Number.isInteger(app.socioeconomic.car.quantity)) {
-        errors['car-quantity'] = 'Ingresá una cantidad entera mayor o igual a 1.'
+      if (outsideRange(app.socioeconomic.car.quantity, 1, 100) || !Number.isInteger(app.socioeconomic.car.quantity)) {
+        errors['car-quantity'] = 'Ingresá una cantidad entera entre 1 y 100.'
       }
       if (!app.socioeconomic.car.brand?.trim()) {
         errors['car-brand'] = 'La marca del automóvil es obligatoria.'
       }
-      if (app.socioeconomic.car.year === '' || outsideRange(app.socioeconomic.car.year, 1900, APPLICATION_YEAR)) {
+      if (outsideRange(app.socioeconomic.car.year, 1900, APPLICATION_YEAR) || !Number.isInteger(app.socioeconomic.car.year)) {
         errors['car-year'] = `Ingresá un año entre 1900 y ${APPLICATION_YEAR}.`
       }
       if (errors['car-quantity'] || errors['car-brand'] || errors['car-year']) {
@@ -235,5 +256,64 @@ export function validateStep(step: number, app: ApplicationFormData): Errors {
   }
   if (step === 7 && !app.acceptedDeclaration) errors.acceptedDeclaration = 'Debés aceptar la declaración para continuar.'
   if (step === 7 && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(app.contactEmail.trim())) errors.contactEmail = 'Ingresá un correo electrónico válido para recibir la confirmación.'
+  if (step === 0) {
+    if (app.request.home && !['minas', 'mariscala', 'montevideo'].includes(app.request.home)) errors.home = 'Seleccioná un hogar válido.'
+    if (app.request.type && !['new', 'renewal'].includes(app.request.type)) errors.type = 'Seleccioná el tipo de solicitud.'
+    if (app.request.type === 'renewal' && typeof app.request.sameHome !== 'boolean') errors.sameHome = 'Indicá si corresponde al mismo hogar.'
+  }
+  if (step === 1) {
+    textLength(errors, 'fullName', app.applicant.fullName, 'Nombre completo', 3, 180)
+    textLength(errors, 'address', app.applicant.address, 'Domicilio', 3, 255)
+    textLength(errors, 'locality', app.applicant.locality, 'Localidad', 2, 120)
+    if (app.applicant.nationalId && (!/^[0-9.-]+$/.test(app.applicant.nationalId) || app.applicant.nationalId.length > 12)) errors.nationalId = 'Ingresá una cédula válida, con números, puntos o guion.'
+  }
+  if (step === 2) {
+    textLength(errors, 'grade', app.studies.grade, 'Año o grado', 1, 100)
+    textLength(errors, 'institution', app.studies.institution, 'Institución', 2, 180)
+    textLength(errors, 'previousInstitution', app.studies.previousInstitution, 'Centro educativo anterior', 0, 180)
+    if (typeof app.studies.hasPendingSubjects !== 'boolean') errors.pendingSubjects = 'Indicá si tiene materias pendientes.'
+  }
+  if (step === 3) {
+    textLength(errors, 'healthCenter', app.health.healthCenter, 'Centro de salud', 2, 180)
+    textLength(errors, 'emergencyName', app.health.emergencyName, 'Nombre del contacto de emergencia', 2, 180)
+    const choices: Array<[keyof typeof app.health, string]> = [['hasDisability', 'disabilityChoice'], ['hasChronicDisease', 'chronicDiseaseChoice'], ['takesControlledMedication', 'medicationChoice'], ['hasNeurodevelopmentDiagnosis', 'neurodevelopment'], ['hasAllergy', 'allergyChoice'], ['receivesScholarship', 'scholarshipChoice'], ['currentlyWorks', 'workChoice']]
+    for (const [field, key] of choices) if (typeof app.health[field] !== 'boolean') errors[key] = 'Seleccioná Sí o No.'
+    if (app.health.hasChronicDisease && typeof app.health.inTreatment !== 'boolean') errors.treatmentChoice = 'Indicá si se encuentra en tratamiento.'
+    if (app.health.hasDisability) textLength(errors, 'dailyLivingSupports', app.health.dailyLivingSupports, 'Apoyos y adaptaciones', 1, 2000)
+    if (app.health.hasChronicDisease) textLength(errors, 'chronicDisease', app.health.chronicDisease, 'Enfermedad crónica', 1, 500)
+    if (app.health.takesControlledMedication) textLength(errors, 'controlledMedication', app.health.controlledMedication, 'Medicación', 1, 500)
+    if (app.health.hasAllergy) textLength(errors, 'allergy', app.health.allergy, 'Alergia', 1, 500)
+    if (app.health.receivesScholarship) textLength(errors, 'scholarship', app.health.scholarship, 'Beca', 1, 250)
+    if (app.health.currentlyWorks) textLength(errors, 'workplace', app.health.workplace, 'Lugar de trabajo', 1, 180)
+  }
+  if (step === 4) {
+    if (app.householdMembers.length > 30) errors.members = 'Se pueden registrar hasta 30 personas convivientes.'
+    const situations = ['lives_with', 'outside', 'deceased', 'unknown', 'no_contact']
+    if (!situations.includes(app.household.motherSituation)) errors.motherSituation = 'Seleccioná la situación de tu madre.'
+    if (!situations.includes(app.household.fatherSituation)) errors.fatherSituation = 'Seleccioná la situación de tu padre.'
+    for (const member of app.householdMembers) {
+      const prefix = `member-${member.id}`
+      for (const [field, label, min, max] of [['surnames', 'Apellidos', 1, 120], ['names', 'Nombres', 1, 120], ['relationship', 'Parentesco', 1, 80], ['occupation', 'Ocupación', 0, 180], ['address', 'Domicilio', 0, 255]] as const) textLength(errors, `${prefix}-${field}`, member[field], label, min, max)
+      if (!['formal_employee', 'retired', 'self_employed', 'informal', 'seasonal', 'unemployed', 'student', 'other'].includes(member.employmentStatus)) errors[`${prefix}-employment`] = 'Seleccioná una situación laboral válida.'
+      if (Object.keys(errors).some((key) => key.startsWith(`${prefix}-`))) errors[prefix] = 'Revisá los campos marcados en este integrante.'
+    }
+    if (app.outsideParents.length > 2 || new Set(app.outsideParents.map((parent) => parent.role)).size !== app.outsideParents.length) errors.members = 'No se pueden repetir las fichas de madre o padre.'
+    for (const parent of app.outsideParents) {
+      const prefix = `parent-${parent.id}`
+      for (const [field, label, min, max] of [['surnames', 'Apellidos', 1, 120], ['name', 'Nombre', 1, 120], ['relationship', 'Parentesco', 1, 80], ['occupation', 'Ocupación', 0, 180]] as const) textLength(errors, `${prefix}-${field}`, parent[field], label, min, max)
+      if (parent.nationalId && (!/^[0-9.-]{7,12}$/.test(parent.nationalId) || !isValidUruguayanId(parent.nationalId))) errors[prefix] = 'Revisá la cédula guardada de este progenitor.'
+      if (Object.keys(errors).some((key) => key.startsWith(`${prefix}-`))) errors[prefix] = 'Revisá los campos marcados en este progenitor.'
+    }
+  }
+  if (step === 5) {
+    if (!['owner', 'usufruct', 'succession', 'tenant', 'promissory_buyer'].includes(app.socioeconomic.housingStatus)) errors.housingStatus = 'Seleccioná la calidad de ocupación de la vivienda.'
+    for (const type of ['motorcycle', 'car'] as const) {
+      if (typeof app.socioeconomic[type].owns !== 'boolean') errors[type] = 'Seleccioná Sí o No.'
+      if (app.socioeconomic[type].owns) textLength(errors, `${type}-brand`, app.socioeconomic[type].brand, 'Marca del vehículo', 1, 100)
+    }
+    for (const key of ['ownsField', 'leasesField'] as const) if (typeof app.socioeconomic.rural[key] !== 'boolean') errors[key] = 'Seleccioná Sí o No.'
+    textLength(errors, 'notes', app.socioeconomic.notes, 'Aclaraciones', 0, 5000)
+  }
+  if (step === 7 && app.contactEmail.trim().length > 254) errors.contactEmail = 'El correo electrónico no puede superar 254 caracteres.'
   return errors
 }

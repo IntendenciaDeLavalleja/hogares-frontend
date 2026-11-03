@@ -55,7 +55,13 @@ export function applyDraftSnapshot(snapshot: DraftSnapshot, beforeRead?: Documen
   const receipt = snapshotReceipt(snapshot)
   if (receipt) { state.setSubmissionReceipt(receipt); return }
   const documents = new Map(state.application.documents.map((document) => [document.type, document]))
-  const changedSinceRead = (document: DocumentMetadata | undefined) => beforeRead && document?.referenceId !== beforeRead.find((before) => before.type === document?.type)?.referenceId
+  const changedSinceRead = (document: DocumentMetadata | undefined) => {
+    if (!beforeRead) return false
+    const before = beforeRead.find((item) => item.type === document?.type)
+    if (document?.referenceId !== before?.referenceId) return true
+    if (document?.revision || before?.revision) return document?.revision !== before?.revision
+    return document?.updatedAt !== before?.updatedAt
+  }
   for (const stored of snapshot.documents) {
     const local = documents.get(stored.type)
     if (changedSinceRead(local)) continue

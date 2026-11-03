@@ -8,7 +8,7 @@ const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR
 
 interface UploadRequest { documentType: string; contentType: string; body: string; token?: string }
 
-async function openDocuments(page: Page, options: { failOnce?: string; loseResponseOnce?: string } = {}) {
+async function openDocuments(page: Page, options: { failOnce?: string; loseResponseOnce?: string; loseReplacementResponseOnce?: string; failReplacementOnce?: string } = {}) {
   const state = {
     saved: null as Record<string, unknown> | null,
     documents: [] as StoredDocument[],
@@ -53,15 +53,21 @@ async function openDocuments(page: Page, options: { failOnce?: string; loseRespo
         state.failed = true
         return route.fulfill({ status: 429, headers: { 'Retry-After': '1' }, json: { error: 'Demasiadas solicitudes.' } })
       }
+      const previous = state.documents.find(document => document.type === documentType)
+      if (previous && options.failReplacementOnce === documentType && !state.failed) {
+        state.failed = true
+        return route.fulfill({ status: 503, json: { error: 'No se pudo guardar el documento.' } })
+      }
       const isPdf = contentType === 'application/pdf'
       const document: StoredDocument = {
-        id: `document-${documentType}-${state.requests.length}`,
+        id: `document-${documentType}`,
+        revision: String(state.requests.length).padStart(64, '0'), updatedAt: '2026-11-03T12:00:00.000000Z',
         type: documentType as StoredDocument['type'], name: isPdf ? 'documento.pdf' : 'foto.jpg',
         storedName: isPdf ? 'documento.pdf' : 'foto.webp',
         mimeType: isPdf ? 'application/pdf' : 'image/webp', size: isPdf ? pdf.length : 100,
       }
       state.documents = [...state.documents.filter(item => item.type !== documentType), document]
-      if (options.loseResponseOnce === documentType && !state.responseLost) {
+      if ((options.loseResponseOnce === documentType || previous && options.loseReplacementResponseOnce === documentType) && !state.responseLost) {
         state.responseLost = true
         return route.abort('failed')
       }
@@ -129,4 +135,37 @@ test('conserva el adjunto y los datos personales al recargar y volver a los paso
   expect(stored.application.applicant.fullName).toBe(contract.baseline.applicant.fullName)
   expect(stored.backendDraft.id).toBe(draft.id)
   expect(state.requests.filter(request => request.documentType === 'applicant_id')).toHaveLength(1)
+})
+
+test('recupera un reemplazo con mismo ID y fecha aunque se pierda su respuesta', async ({ page }) => {
+  const state = await openDocuments(page, { loseReplacementResponseOnce: 'address' })
+  const input = page.getByLabel('Constancia de domicilio', { exact: true })
+  await input.setInputFiles({ name: 'domicilio.pdf', mimeType: 'application/pdf', buffer: pdf })
+  await expect(page.getByRole('status').filter({ hasText: /domicilio\.pdf/ })).toContainText('guardado correctamente')
+  const previous = { ...state.documents[0] }
+  await input.setInputFiles({ name: 'domicilio.pdf', mimeType: 'application/pdf', buffer: pdf })
+  await expect.poll(() => state.requests.length).toBe(2)
+  await expect(page.getByRole('status').filter({ hasText: /domicilio\.pdf/ })).toContainText('guardado correctamente')
+  expect(state.documents[0].id).toBe(previous.id)
+  expect(state.documents[0].updatedAt).toBe(previous.updatedAt)
+  expect(state.documents[0].revision).not.toBe(previous.revision)
+  const stored = await page.evaluate(() => JSON.parse(localStorage.getItem('idl-hogares-estudiantiles-2026')!).state)
+  expect(stored.application.documents.find((document: StoredDocument) => document.type === 'address').revision).toBe(state.documents[0].revision)
+  await expect(page.getByRole('button', { name: 'Reintentar carga', exact: true })).toHaveCount(0)
+})
+
+test('un reemplazo fallido conserva el anterior y permite reintentar sin volver a seleccionar', async ({ page }) => {
+  const state = await openDocuments(page, { failReplacementOnce: 'address' })
+  const input = page.getByLabel('Constancia de domicilio', { exact: true })
+  await input.setInputFiles({ name: 'domicilio-anterior.pdf', mimeType: 'application/pdf', buffer: pdf })
+  await expect(page.getByRole('status').filter({ hasText: /domicilio-anterior\.pdf/ })).toContainText('guardado correctamente')
+  const previous = { ...state.documents[0] }
+  await input.setInputFiles({ name: 'domicilio-nuevo.pdf', mimeType: 'application/pdf', buffer: pdf })
+  await expect(page.getByRole('alert').filter({ hasText: /No se pudo guardar el documento/ })).toContainText('El documento anterior continúa guardado')
+  expect(state.documents[0].revision).toBe(previous.revision)
+  await expect(page.getByRole('status').filter({ hasText: /domicilio-anterior\.pdf/ })).toContainText('guardado correctamente')
+  await page.getByRole('button', { name: 'Reintentar carga', exact: true }).click()
+  await expect.poll(() => state.requests.length).toBe(3)
+  await expect(page.getByRole('alert').filter({ hasText: /No se pudo guardar el documento/ })).toHaveCount(0)
+  expect(state.documents[0].revision).not.toBe(previous.revision)
 })

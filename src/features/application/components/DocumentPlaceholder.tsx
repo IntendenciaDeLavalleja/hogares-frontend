@@ -20,7 +20,7 @@ export function DocumentPlaceholder({ type, label, description, required }: { ty
     state.updateApplication({ documents: [...state.application.documents.filter((item) => item.type !== type), metadata] })
   }
 
-  async function upload(file: File, metadata: DocumentMetadata, previous?: DocumentMetadata) {
+  async function upload(file: File, metadata: DocumentMetadata) {
     setPhase('uploading')
     setPreparedDocumentFile(type, file)
     setMetadata({ ...metadata, status: 'uploading' })
@@ -28,7 +28,7 @@ export function DocumentPlaceholder({ type, label, description, required }: { ty
     let uploaded: DocumentMetadata
     try {
       await persistApplicationDraft(draft)
-      uploaded = await uploadApplicationDocument(draft, type, file, previous?.referenceId)
+      uploaded = await uploadApplicationDocument(draft, type, file)
     } catch (failure) {
       if (failure instanceof ApiError && [403, 404, 410].includes(failure.status ?? 0)) {
         draft = await recoverApplicationDraft(draft, failure)
@@ -54,7 +54,7 @@ export function DocumentPlaceholder({ type, label, description, required }: { ty
       const prepared = await prepareDocumentFile(file, !retry)
       if (useApplicationStore.getState().applicationSession !== session) return
       metadata = { type, name: retry ? previous?.name ?? file.name : file.name, optimizedFileName: prepared.name, mimeType: prepared.type, originalSize: retry ? previous?.originalSize ?? file.size : file.size, optimizedSize: prepared.size, status: 'pending' }
-      await upload(prepared, metadata, previous)
+      await upload(prepared, metadata)
     } catch (failure) {
       if (useApplicationStore.getState().applicationSession !== session) return
       setError(failure instanceof Error ? failure.message : 'No se pudo subir el archivo. Volvé a intentar.')

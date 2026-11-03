@@ -159,6 +159,8 @@ export interface DocumentMetadata {
   height?: number
   wasOptimized?: boolean
   optimizedFileName?: string
+  updatedAt?: string
+  revision?: string
 }
 
 export interface ApplicationFormData {
@@ -190,6 +192,8 @@ export interface StoredDocument {
   size: number
   width?: number
   height?: number
+  updatedAt?: string | null
+  revision?: string
 }
 
 export interface DraftSnapshot {

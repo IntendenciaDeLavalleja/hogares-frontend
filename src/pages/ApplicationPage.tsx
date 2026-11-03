@@ -60,20 +60,22 @@ export function ApplicationPage() {
     const nextErrors = validateStep(currentStep, application)
     setErrors(nextErrors)
     if (!Object.keys(nextErrors).length) {
+      if (document.activeElement instanceof HTMLElement) document.activeElement.blur()
       nextStep()
-      window.scrollTo({ top: 0, behavior: 'smooth' })
+      window.scrollTo({ top: 0, behavior: 'instant' })
     } else {
       setTimeout(() => {
         const firstErrorEl = document.querySelector('[aria-invalid="true"], [role="alert"]')
-        firstErrorEl?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        firstErrorEl?.scrollIntoView({ behavior: 'instant', block: 'center' })
       }, 50)
     }
   }
 
   const goBack = () => {
+    if (document.activeElement instanceof HTMLElement) document.activeElement.blur()
     setErrors({})
     previousStep()
-    window.scrollTo({ top: 0, behavior: 'smooth' })
+    window.scrollTo({ top: 0, behavior: 'instant' })
   }
 
   const finish = async () => {
@@ -133,8 +135,8 @@ export function ApplicationPage() {
     <StepHousehold errors={errors} onClearError={clearError} />,
     <StepSocioeconomic errors={errors} onClearError={clearError} />,
     <StepDocuments errors={errors} />,
-    <><StepReview onEdit={(index) => { setCurrentStep(index); setErrors({}); window.scrollTo({ top: 0, behavior: 'smooth' }) }} errors={errors} /><SubmissionConfirmation key={captchaAttempt} value={captcha} onChange={setCaptcha} errors={errors} /></>
+    <><StepReview onEdit={(index) => { setCurrentStep(index); setErrors({}); window.scrollTo({ top: 0, behavior: 'instant' }) }} errors={errors} /><SubmissionConfirmation key={captchaAttempt} value={captcha} onChange={setCaptcha} errors={errors} /></>
   ][currentStep]
 
-  return <FormLayout><PageContainer className="py-6 sm:py-8"><div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-xs font-bold uppercase tracking-[0.16em] text-primary">Solicitud de alojamiento</p><p className="mt-1 text-sm text-base-content/55">Hogares Estudiantiles · Convocatoria {APPLICATION_YEAR}</p></div><AutoSaveIndicator /></div><p className="mb-4 text-sm text-base-content/75" role="status">{draftSync.message}{draftSync.failed && <button className="ml-2 font-semibold text-primary underline" type="button" onClick={draftSync.retry}>Reintentar guardado</button>}</p><FormStepper currentStep={currentStep} onSelect={(index) => { if (isSubmitting) return; setCurrentStep(index); setErrors({}); setSubmitError(null); setServerMessages([]); window.scrollTo({ top: 0, behavior: 'smooth' }) }} /><section className="rounded-box border border-base-300 bg-base-100 p-5 shadow-sm sm:p-8"><fieldset className="min-w-0" disabled={isSubmitting}>{step}</fieldset>{submitError && <div className="alert alert-error mt-6" role="alert"><div><p>{submitError}</p>{serverMessages.length > 0 && <ul className="mt-2 list-disc pl-5">{serverMessages.map((message) => <li key={message}>{message}</li>)}</ul>}</div>{currentStep === 7 && <button type="button" className="btn btn-sm" onClick={() => setCurrentStep(6)}>Ir a Documentación</button>}</div>}<FormNavigation currentStep={currentStep} onBack={goBack} onNext={goNext} onSubmit={() => void finish()} canSubmit={!isSubmitting} submitting={isSubmitting} /></section></PageContainer></FormLayout>
+  return <FormLayout><PageContainer className="py-6 sm:py-8"><div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-xs font-bold uppercase tracking-[0.16em] text-primary">Solicitud de alojamiento</p><p className="mt-1 text-sm text-base-content/55">Hogares Estudiantiles · Convocatoria {APPLICATION_YEAR}</p></div><AutoSaveIndicator /></div><p className="mb-4 text-sm text-base-content/75" role="status">{draftSync.message}{draftSync.failed && <button className="ml-2 font-semibold text-primary underline" type="button" onClick={draftSync.retry}>Reintentar guardado</button>}</p><FormStepper currentStep={currentStep} onSelect={(index) => { if (isSubmitting) return; setCurrentStep(index); setErrors({}); setSubmitError(null); setServerMessages([]); window.scrollTo({ top: 0, behavior: 'instant' }) }} /><section className="rounded-box border border-base-300 bg-base-100 p-5 shadow-sm sm:p-8"><fieldset className="min-w-0" disabled={isSubmitting}>{step}</fieldset>{submitError && <div className="alert alert-error mt-6" role="alert"><div><p>{submitError}</p>{serverMessages.length > 0 && <ul className="mt-2 list-disc pl-5">{serverMessages.map((message) => <li key={message}>{message}</li>)}</ul>}</div>{currentStep === 7 && <button type="button" className="btn btn-sm" onClick={() => setCurrentStep(6)}>Ir a Documentación</button>}</div>}<FormNavigation currentStep={currentStep} onBack={goBack} onNext={goNext} onSubmit={() => void finish()} canSubmit={!isSubmitting} submitting={isSubmitting} /></section></PageContainer></FormLayout>
 }

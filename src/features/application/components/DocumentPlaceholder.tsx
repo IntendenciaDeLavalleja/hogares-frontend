@@ -52,6 +52,7 @@ export function DocumentPlaceholder({ type, label, description, required }: { ty
     let metadata: DocumentMetadata | undefined
     try {
       const prepared = await prepareDocumentFile(file, !retry)
+      if (useApplicationStore.getState().applicationSession !== session) return
       metadata = { type, name: retry ? previous?.name ?? file.name : file.name, optimizedFileName: prepared.name, mimeType: prepared.type, originalSize: retry ? previous?.originalSize ?? file.size : file.size, optimizedSize: prepared.size, status: 'pending' }
       await upload(prepared, metadata, previous)
     } catch (failure) {

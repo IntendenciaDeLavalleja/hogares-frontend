@@ -1,0 +1,150 @@
+@import "tailwindcss";
+@import "../features/landing/landing.css";
+@plugin "daisyui";
+
+@theme {
+  --font-sans: "Avenir Next", Avenir, "Segoe UI", sans-serif;
+}
+
+:root {
+  color-scheme: light;
+}
+
+html {
+  background: #f4f6f8;
+}
+
+body {
+  min-width: 320px;
+  margin: 0;
+  background: #f4f6f8;
+  color: #183149;
+  font-family: var(--font-sans);
+}
+
+:is(button, input, select, textarea):not(.landing-page *) {
+  font: inherit;
+}
+
+.form-control {
+  min-width: 0;
+  min-inline-size: 0;
+}
+
+.form-control > .label {
+  width: 100%;
+  white-space: normal;
+}
+
+.page-container {
+  width: min(100% - 2rem, 1180px);
+  margin-inline: auto;
+}
+
+.brand-mark {
+  display: block;
+  height: 2.35rem;
+  width: auto;
+  flex-shrink: 0;
+  object-fit: contain;
+}
+
+.brand-mark-large {
+  height: 3.25rem;
+}
+
+.institution-panel {
+  border-left: 3px solid var(--color-primary);
+  background: white;
+  padding: 2rem;
+  box-shadow: 0 12px 35px rgb(20 49 76 / 8%);
+}
+
+.section-rule {
+  width: 2.75rem;
+  height: 0.2rem;
+  margin-bottom: 1rem;
+  border-radius: 999px;
+  background: var(--color-primary);
+}
+
+.home-choice {
+  display: flex;
+  min-height: 7.75rem;
+  cursor: pointer;
+  flex-direction: column;
+  justify-content: center;
+  border: 1px solid var(--color-base-300);
+  border-radius: 0.75rem;
+  background: var(--color-base-100);
+  padding: 1.15rem;
+  transition: border-color 150ms ease, background-color 150ms ease;
+}
+
+.home-choice:hover {
+  border-color: color-mix(in srgb, var(--color-primary) 45%, var(--color-base-300));
+}
+
+.home-choice-selected {
+  border-color: var(--color-primary);
+  background: color-mix(in srgb, var(--color-primary) 7%, white);
+  box-shadow: inset 0 0 0 1px var(--color-primary);
+}
+
+.choice-pill {
+  display: inline-flex;
+  min-height: 2.75rem;
+  cursor: pointer;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--color-base-300);
+  border-radius: 0.6rem;
+  background: var(--color-base-100);
+  padding-inline: 1rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.choice-pill-selected {
+  border-color: var(--color-primary);
+  background: color-mix(in srgb, var(--color-primary) 9%, white);
+  color: var(--color-primary);
+}
+
+.notice {
+  display: flex;
+  gap: 0.75rem;
+  border-left: 3px solid var(--color-primary);
+  background: color-mix(in srgb, var(--color-primary) 6%, white);
+  padding: 0.9rem 1rem;
+  font-size: 0.875rem;
+  line-height: 1.45;
+}
+
+.subsection-title {
+  margin-bottom: 1rem;
+  border-bottom: 1px solid var(--color-base-300);
+  padding-bottom: 0.65rem;
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+.summary-section {
+  padding: 1.25rem;
+}
+
+@media (min-width: 640px) {
+  .summary-section {
+    padding: 1.5rem 1.75rem;
+  }
+}
+
+@media (max-width: 639px) {
+  .page-container {
+    width: min(100% - 1.25rem, 1180px);
+  }
+
+  .institution-panel {
+    padding: 1.35rem;
+  }
+}

@@ -1,0 +1,330 @@
+@import "@fontsource-variable/archivo";
+@import "@fontsource-variable/archivo/wght-italic.css";
+@import "@fontsource/ibm-plex-mono/latin-400.css";
+@import "@fontsource/ibm-plex-mono/latin-500.css";
+@import "@fontsource/ibm-plex-mono/latin-400-italic.css";
+@import "@fontsource/instrument-serif/latin-400.css";
+@import "@fontsource/instrument-serif/latin-400-italic.css";
+
+@plugin "daisyui/theme" {
+  name: "lavalleja";
+  default: false;
+  prefersdark: false;
+  color-scheme: light;
+
+  --color-base-100: #f4eddf;
+  --color-base-200: #eae0cc;
+  --color-base-300: #ddcfb4;
+  --color-base-content: #17120f;
+
+  --color-primary: #6d1b4e;
+  --color-primary-content: #fbf7ec;
+  --color-secondary: #c8202f;
+  --color-secondary-content: #fff8ef;
+  --color-accent: #e9b949;
+  --color-accent-content: #17120f;
+
+  --color-neutral: #17120f;
+  --color-neutral-content: #f4eddf;
+
+  --color-info: #26547c;
+  --color-info-content: #f4eddf;
+  --color-success: #1d6b45;
+  --color-success-content: #f4eddf;
+  --color-warning: #a16207;
+  --color-warning-content: #f4eddf;
+  --color-error: #a31d24;
+  --color-error-content: #f4eddf;
+
+  --radius-selector: 999rem;
+  --radius-field: 0.75rem;
+  --radius-box: 1rem;
+
+  --size-selector: 0.25rem;
+  --size-field: 0.25rem;
+  --border: 1px;
+  --depth: 0;
+  --noise: 0;
+}
+
+@theme {
+  --font-landing-sans: "Archivo Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Archivo Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-landing-serif: "Instrument Serif", Georgia, "Times New Roman", serif;
+  --font-landing-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", monospace;
+
+  --color-paper: #f4eddf;
+  --color-paper-deep: #eae0cc;
+  --color-cream: #fbf7ec;
+  --color-ink: #17120f;
+  --color-ochre: #e9b949;
+  --color-ochre-deep: #d5a22f;
+  --color-plum: #6d1b4e;
+  --color-plum-deep: #4a0f34;
+  --color-flag-red: #c8202f;
+  --color-flag-green: #1d6b45;
+
+  --shadow-hard-sm: 3px 3px 0 0 #17120f;
+  --shadow-hard: 6px 6px 0 0 #17120f;
+  --shadow-hard-lg: 10px 10px 0 0 #17120f;
+  --shadow-hard-paper: 6px 6px 0 0 #f4eddf;
+
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@layer base {
+  html:has(.landing-page) {
+    scroll-behavior: smooth;
+    scroll-padding-top: 6.5rem;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  .landing-page {
+    @apply bg-paper font-sans text-ink antialiased;
+    overflow-x: clip;
+  }
+
+  .landing-page::before {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    pointer-events: none;
+    content: "";
+    opacity: 0.055;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 220 220' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.82' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    mix-blend-mode: multiply;
+  }
+
+  .landing-page :is(h1, h2, h3, h4) {
+    text-wrap: balance;
+  }
+
+  .landing-page p {
+    text-wrap: pretty;
+  }
+
+  .landing-page ::selection {
+    background: var(--color-ink);
+    color: var(--color-ochre);
+  }
+
+  .landing-page :focus-visible {
+    outline: 2px solid var(--color-ink);
+    outline-offset: 3px;
+  }
+
+  .landing-page img {
+    user-select: none;
+  }
+}
+
+@layer components {
+  .landing-page .shell {
+    width: 100%;
+    max-width: 92rem;
+    margin-inline: auto;
+    padding-inline: clamp(1.15rem, 4.2vw, 4rem);
+  }
+
+  .landing-page .display {
+    font-family: var(--font-display);
+    font-weight: 900;
+    line-height: 0.82;
+    letter-spacing: -0.055em;
+    text-transform: uppercase;
+  }
+
+  .landing-page .serif-accent {
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-weight: 400;
+    letter-spacing: -0.015em;
+    text-transform: none;
+  }
+
+  .landing-page .eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6rem;
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    font-weight: 500;
+    line-height: 1.2;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+  }
+
+  .landing-page .eyebrow-dot {
+    display: inline-block;
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 999px;
+    background: currentColor;
+  }
+
+  .landing-page .nav-link {
+    position: relative;
+    padding-block: 0.35rem;
+    font-size: 0.78rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .landing-page .nav-link::after {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    height: 2px;
+    content: "";
+    background: currentColor;
+    transform: scaleX(0);
+    transform-origin: right;
+    transition: transform 0.35s var(--ease-out-expo);
+  }
+
+  .landing-page .nav-link:hover::after,
+  .landing-page .nav-link[data-active="true"]::after {
+    transform: scaleX(1);
+    transform-origin: left;
+  }
+
+  .landing-page .hero-house {
+    display: inline-block;
+    width: 1.2em;
+    height: 0.8em;
+    margin-inline: 0.01em;
+    vertical-align: -0.055em;
+    overflow: visible;
+  }
+
+  .landing-page .hero-line-1 {
+    font-size: clamp(3.4rem, 14.4vw, 15rem);
+    white-space: nowrap;
+  }
+
+  .landing-page .hero-line-2 {
+    font-size: clamp(1.8rem, 8.6vw, 9.5rem);
+    white-space: nowrap;
+  }
+
+  .landing-page .marquee-pill {
+    position: relative;
+    display: flex;
+    align-items: center;
+    width: 100%;
+    overflow: hidden;
+    padding-block: clamp(0.75rem, 1.3vw, 1.05rem);
+    color: var(--color-ochre);
+    background: var(--color-ink);
+    border-radius: 999px;
+  }
+
+  .landing-page .marquee-pill::before,
+  .landing-page .marquee-pill::after {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    z-index: 2;
+    width: clamp(1.4rem, 4vw, 3.5rem);
+    pointer-events: none;
+    content: "";
+  }
+
+  .landing-page .marquee-pill::before {
+    left: 0;
+    background: linear-gradient(to right, var(--color-ink), transparent);
+  }
+
+  .landing-page .marquee-pill::after {
+    right: 0;
+    background: linear-gradient(to left, var(--color-ink), transparent);
+  }
+
+  .landing-page .marquee {
+    display: flex;
+    width: 100%;
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  .landing-page .marquee-track {
+    display: flex;
+    flex: 0 0 auto;
+    min-width: max-content;
+    animation: landing-marquee var(--marquee-duration, 32s) linear infinite;
+  }
+
+  .landing-page .marquee-group {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 2.5rem;
+    padding-right: 2.5rem;
+  }
+
+  .landing-page .marquee:hover .marquee-track {
+    animation-play-state: paused;
+  }
+
+}
+
+@layer utilities {
+  .landing-page .text-outline-paper {
+    color: transparent;
+    -webkit-text-stroke: 1.5px var(--color-paper);
+  }
+}
+
+@keyframes landing-marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+@keyframes landing-nudge {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(6px);
+  }
+}
+
+.landing-page .animate-nudge {
+  animation: landing-nudge 1.9s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html:has(.landing-page) {
+    scroll-behavior: auto;
+  }
+
+  .landing-page,
+  .landing-page *,
+  .landing-page *::before,
+  .landing-page *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+.landing-page {
+  --font-sans: var(--font-landing-sans);
+  --font-serif: var(--font-landing-serif);
+  --font-mono: var(--font-landing-mono);
+  min-height: 100vh;
+  isolation: isolate;
+}
+.landing-page [data-duration="36"] { --marquee-duration: 36s; }
+.landing-page [data-duration="48"] { --marquee-duration: 48s; }
+
+.landing-page .tracking-form .input { border: 1.5px solid color-mix(in srgb, var(--color-ink) 28%, transparent); background:var(--color-paper); min-height:3.1rem; }
+.landing-page .tracking-form .input:focus { border-color:var(--color-plum); outline-color:var(--color-plum); }
+.landing-page .tracking-form .label { color:var(--color-ink); margin-bottom:.35rem; }

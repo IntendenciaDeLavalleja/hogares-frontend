@@ -1,0 +1,14 @@
+.git
+.env
+.env.*
+.github
+tests
+test-results
+playwright-report
+node_modules
+dist
+backend
+sample-backend
+sample-frontend
+sample-img-converter
+*.log
